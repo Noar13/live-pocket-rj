@@ -1,13 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Data pribadi per akun (anonymous / Google)
-    match /artifacts/{appId}/users/{userId}/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    // Wajib login Google (login anonim tidak diterima)
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.firebase.sign_in_provider != 'anonymous';
     }
+
+    // Data pribadi per akun
+    match /artifacts/{appId}/users/{userId}/{document=**} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
     // Vault bersama via kode sinkronisasi (tanpa list & delete)
     match /artifacts/{appId}/public/data/{docId} {
-      allow get, create, update: if request.auth != null;
+      allow get, create, update: if signedIn();
     }
   }
 }

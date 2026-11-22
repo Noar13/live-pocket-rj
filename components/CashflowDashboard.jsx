@@ -51,7 +51,7 @@ import {
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import {
   getAuth,
-  signInAnonymously,
+  signInWithRedirect,
   onAuthStateChanged,
   GoogleAuthProvider,
   signInWithPopup,
@@ -686,6 +686,10 @@ export default function App() {
 
   // --- STATE AUTENTIKASI & CLOUD SYNC ---
   const [user, setUser] = useState(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [saveError, setSaveError] = useState(null); // { reason, payload, blocked }
   const [customVaultKey, setCustomVaultKey] = useState('');
   const [syncStatus, setSyncStatus] = useState('connecting'); // connecting | synced | saving | error
   const [lastCloudSync, setLastCloudSync] = useState(null);
@@ -722,23 +726,25 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3200);
   };
 
-  // --- AUTENTIKASI FIREBASE OTOMATIS ---
+  // --- AUTENTIKASI FIREBASE (WAJIB LOGIN GOOGLE, TANPA LOGIN ANONIM) ---
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        if (!auth.currentUser) {
-          await signInAnonymously(auth);
-        }
-      } catch (err) {
-        console.error('Auth error:', err);
-        setSyncStatus('error');
-      }
-    };
-    initAuth();
     const unsubAuth = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
+      setUser(currentUser && !currentUser.isAnonymous ? currentUser : null);
+      setAuthReady(true);
     });
     return () => unsubAuth();
+  }, []);
+
+  // --- DETEKSI KONEKSI INTERNET PERANGKAT ---
+  useEffect(() => {
+    const goOffline = () => setSyncStatus('error');
+    const goOnline = () => setSyncStatus((s) => (s === 'error' ? 'connecting' : s));
+    window.addEventListener('offline', goOffline);
+    window.addEventListener('online', goOnline);
+    return () => {
+      window.removeEventListener('offline', goOffline);
+      window.removeEventListener('online', goOnline);
+    };
   }, []);
 
   const getCloudDocRef = () => {
@@ -750,11 +756,25 @@ export default function App() {
     return doc(db, 'artifacts', appId, 'users', user.uid, 'finance', 'state');
   };
 
-  // Fungsi simpan eksplisit ke Firestore Cloud
+  // Fungsi simpan ke Firestore Cloud. Return true jika BENAR-BENAR tersimpan di server.
+  const SAVE_TIMEOUT_MS = 10000;
   const persistStateToCloud = async (overrideState = {}) => {
-    if (!user) return;
+    const fail = (reason) => {
+      setSyncStatus('error');
+      setToastMessage(null);
+      setSaveError({ reason, payload: overrideState, blocked: false });
+      return false;
+    };
+
+    if (!user) return fail('Kamu belum login.');
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      return fail('Perangkat sedang offline.');
+    }
+    if (!hasLoadedInitialCloudRef.current) {
+      return fail('Data cloud belum selesai dimuat.');
+    }
     const docRef = getCloudDocRef();
-    if (!docRef) return;
+    if (!docRef) return fail('Dokumen cloud tidak ditemukan.');
 
     try {
       setSyncStatus('saving');
@@ -771,14 +791,25 @@ export default function App() {
         sheetsWebhookUrl: overrideState.sheetsWebhookUrl ?? sheetsWebhookUrl,
         sheetsAutoSync: overrideState.sheetsAutoSync ?? sheetsAutoSync,
         updatedAt: new Date().toISOString(),
-        ownerEmail: user.email || 'anonymous'
+        ownerEmail: user.email || ''
       };
-      await setDoc(docRef, payload, { merge: true });
+      // setDoc tidak pernah reject saat offline (menunggu tanpa batas) -> beri batas waktu
+      await Promise.race([
+        setDoc(docRef, payload, { merge: true }),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), SAVE_TIMEOUT_MS)
+        )
+      ]);
       setLastCloudSync(new Date());
       setSyncStatus('synced');
+      return true;
     } catch (err) {
       console.error('Gagal menyimpan ke Cloud:', err);
-      setSyncStatus('error');
+      return fail(
+        err?.message === 'timeout'
+          ? 'Koneksi terputus atau terlalu lambat.'
+          : 'Server menolak penyimpanan (cek Firestore Rules / login).'
+      );
     }
   };
 
@@ -788,12 +819,22 @@ export default function App() {
     const docRef = getCloudDocRef();
     if (!docRef) return;
 
+    hasLoadedInitialCloudRef.current = false;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSyncStatus('connecting');
     const unsubscribe = onSnapshot(
       docRef,
+      { includeMetadataChanges: true },
       (snap) => {
+        // Data dari cache lokal (offline) JANGAN dianggap data cloud: cegah timpa data dengan data awal
+        if (snap.metadata.fromCache) {
+          setSyncStatus(
+            typeof navigator !== 'undefined' && navigator.onLine === false ? 'error' : 'connecting'
+          );
+          return;
+        }
         if (snap.exists()) {
+          if (snap.metadata.hasPendingWrites) return; // echo dari tulisan lokal sendiri
           const data = snap.data();
           isRemoteSnapshotRef.current = true;
           if (Array.isArray(data.transactions)) setTransactions(data.transactions);
@@ -841,23 +882,55 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, customVaultKey]);
 
-  // --- LOGIN GOOGLE UNTUK SINKRONISASI LINTAS PERANGKAT ---
+  // --- LOGIN GOOGLE (WAJIB) ---
   const handleGoogleSignIn = async () => {
+    setSigningIn(true);
+    setAuthError('');
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
-      showToast('Berhasil terhubung dengan Akun Google!');
+      showToast('Login Google berhasil!');
     } catch (err) {
       console.error('Google Sign-In error:', err);
-      showToast('Popup Google diblokir/tidak tersedia. Gunakan Kode Sinkronisasi Cloud di bawah.', 'info');
+      const code = err?.code || '';
+      if (
+        code === 'auth/popup-blocked' ||
+        code === 'auth/operation-not-supported-in-this-environment'
+      ) {
+        try {
+          await signInWithRedirect(auth, provider);
+          return;
+        } catch (err2) {
+          console.error('Redirect Sign-In error:', err2);
+        }
+      }
+      if (code !== 'auth/popup-closed-by-user' && code !== 'auth/cancelled-popup-request') {
+        setAuthError(
+          code === 'auth/unauthorized-domain'
+            ? 'Domain ini belum ada di Firebase > Authentication > Authorized domains.'
+            : code === 'auth/operation-not-allowed'
+            ? 'Provider Google belum diaktifkan di Firebase Authentication.'
+            : 'Login gagal. Coba lagi.'
+        );
+      }
+    } finally {
+      setSigningIn(false);
     }
   };
 
-  const handleSignOutToAnon = async () => {
+  const handleSignOut = async () => {
     try {
       await signOut(auth);
-      await signInAnonymously(auth);
-      showToast('Keluar dari akun Google');
+      // Bersihkan state lokal supaya data akun lama tidak terbawa ke akun lain
+      setTransactions(INITIAL_TRANSACTIONS);
+      setAssets(INITIAL_MARKET_ASSETS);
+      setDebts(INITIAL_DEBTS);
+      setBaseCashBalance(INITIAL_USER_OPENING.Jeki + INITIAL_USER_OPENING.Ririn);
+      setCustomVaultKey('');
+      setSheetsWebhookUrl('');
+      setLastCloudSync(null);
+      setSyncStatus('connecting');
     } catch (err) {
       console.error('Sign out error:', err);
     }
@@ -1153,7 +1226,7 @@ export default function App() {
 
     ctx.fillStyle = '#A7F3D0';
     ctx.font = 'bold 12px sans-serif';
-    ctx.fillText('CASHFLOW LIVE • LAPORAN KEUANGAN RIRIN & JEKI', 44, 52);
+    ctx.fillText('DOMPETKU LIVE • LAPORAN KEUANGAN RIRIN & JEKI', 44, 52);
 
     ctx.fillStyle = '#FFFFFF';
     ctx.font = '11px sans-serif';
@@ -1365,7 +1438,7 @@ export default function App() {
     ctx.font = '10px sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(
-      'Generated by Cashflow Live • Ririn & Jeki Cloud Wealth Dashboard',
+      'Generated by DompetKu Live • Ririn & Jeki Cloud Wealth Dashboard',
       width / 2,
       818
     );
@@ -1455,14 +1528,14 @@ export default function App() {
     setAssets(nextAssets);
     setIsTxModalOpen(false);
 
-    await persistStateToCloud({
+    const saved = await persistStateToCloud({
       transactions: nextTransactions,
       baseCashBalance: nextCash,
       debts: nextDebts,
       assets: nextAssets
     });
 
-    if (sheetsAutoSync && sheetsWebhookUrl.trim()) {
+    if (saved && sheetsAutoSync && sheetsWebhookUrl.trim()) {
       pushToGoogleSheets('single_tx', txWithRunning);
     }
   };
@@ -1535,13 +1608,13 @@ export default function App() {
     setTransactions(nextTransactions);
     setTradeModal({ open: false, asset: null, action: 'buy' });
 
-    await persistStateToCloud({
+    const saved = await persistStateToCloud({
       transactions: nextTransactions,
       baseCashBalance: nextCash,
       assets: nextAssets
     });
 
-    if (sheetsAutoSync && sheetsWebhookUrl.trim()) {
+    if (saved && sheetsAutoSync && sheetsWebhookUrl.trim()) {
       pushToGoogleSheets('single_tx', newTxRecord);
     }
   };
@@ -1569,6 +1642,30 @@ export default function App() {
     });
   };
 
+  // Cegah pencatatan saat cloud belum tersambung / offline
+  const openTxModal = () => {
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    if (offline || (syncStatus !== 'synced' && syncStatus !== 'saving')) {
+      setSaveError({
+        reason: offline
+          ? 'Perangkat sedang offline.'
+          : 'Cloud belum tersambung. Tunggu status CLOUD hijau lalu coba lagi.',
+        payload: null,
+        blocked: true
+      });
+      return;
+    }
+    setIsTxModalOpen(true);
+  };
+
+  const handleRetrySave = async () => {
+    const pending = saveError?.payload;
+    setSaveError(null);
+    if (!pending) return;
+    const ok = await persistStateToCloud(pending);
+    if (ok) showToast('Transaksi berhasil tersimpan ke cloud!');
+  };
+
   const theme = {
     bgOuter: darkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-200 text-slate-900',
     appShell: darkMode
@@ -1584,6 +1681,45 @@ export default function App() {
       ? 'bg-slate-900/95 border-slate-800'
       : 'bg-white/95 border-slate-200'
   };
+
+  // --- GERBANG LOGIN: WAJIB LOGIN GOOGLE SEBELUM MASUK DASHBOARD ---
+  if (!authReady) {
+    return (
+      <div className="h-dvh w-full flex items-center justify-center bg-slate-950 text-slate-300 text-sm">
+        Memuat DompetKu...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="h-dvh w-full flex items-center justify-center bg-slate-950 text-slate-100 p-6">
+        <div className="w-full max-w-sm rounded-3xl border border-slate-800 bg-slate-900 p-6 text-center shadow-2xl shadow-black/60">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+            <Wallet className="w-7 h-7" />
+          </div>
+          <h1 className="mt-4 font-bold text-lg tracking-tight">DompetKu Live</h1>
+          <p className="mt-1.5 text-xs text-slate-400">
+            Login dengan Google dulu supaya transaksi tersimpan online dan sinkron di semua perangkat.
+          </p>
+          <button
+            onClick={handleGoogleSignIn}
+            disabled={signingIn}
+            className="mt-5 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-white text-slate-900 font-semibold text-sm hover:bg-slate-100 active:scale-[0.99] transition disabled:opacity-60"
+          >
+            <LogIn className="w-4 h-4" />
+            {signingIn ? 'Membuka Google...' : 'Masuk dengan Google'}
+          </button>
+          {authError && (
+            <p className="mt-3 text-[11px] text-rose-400 flex items-start gap-1.5 text-left">
+              <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              {authError}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -1612,7 +1748,7 @@ export default function App() {
             </div>
             <div>
               <div className="flex items-center gap-1.5">
-                <h1 className="font-bold text-sm sm:text-base tracking-tight">Cashflow Live</h1>
+                <h1 className="font-bold text-sm sm:text-base tracking-tight">DompetKu Live</h1>
                 <button
                   onClick={() => setActiveTab('sync')}
                   title="Status Sinkronisasi Cloud"
@@ -1629,6 +1765,8 @@ export default function App() {
                     ? 'CLOUD'
                     : syncStatus === 'saving'
                     ? 'SYNCING'
+                    : syncStatus === 'connecting'
+                    ? 'CONNECTING'
                     : 'OFFLINE'}
                 </button>
               </div>
@@ -1774,7 +1912,7 @@ export default function App() {
               syncStatus={syncStatus}
               lastCloudSync={lastCloudSync}
               onGoogleSignIn={handleGoogleSignIn}
-              onSignOut={handleSignOutToAnon}
+              onSignOut={handleSignOut}
               sheetsWebhookUrl={sheetsWebhookUrl}
               setSheetsWebhookUrl={(val) => {
                 setSheetsWebhookUrl(val);
@@ -1799,7 +1937,7 @@ export default function App() {
 
         {/* TOMBOL FLOATING TAMBAH TRANSAKSI */}
         <button
-          onClick={() => setIsTxModalOpen(true)}
+          onClick={openTxModal}
           aria-label="Tambah Transaksi"
           className="absolute bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-30 flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-semibold text-xs px-4 py-3.5 rounded-full shadow-lg shadow-emerald-600/35 active:scale-95 transition-all"
         >
@@ -1848,6 +1986,50 @@ export default function App() {
             darkMode={darkMode}
           />
         </nav>
+
+        {/* POPUP GAGAL SIMPAN */}
+        {saveError && (
+          <div className="absolute inset-0 z-[70] flex items-center justify-center bg-black/70 p-5">
+            <div
+              role="alertdialog"
+              aria-modal="true"
+              className={`w-full max-w-sm rounded-3xl border p-5 shadow-2xl ${
+                darkMode ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+              }`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 shrink-0 rounded-full bg-rose-500/15 flex items-center justify-center">
+                  <AlertCircle className="w-5 h-5 text-rose-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">Your transaction was not recorded properly</h3>
+                  <p className="text-xs mt-1.5 opacity-80">{saveError.reason}</p>
+                  <p className="text-[11px] mt-2 opacity-60">
+                    {saveError.blocked
+                      ? 'Transaksi tidak bisa dicatat sampai cloud tersambung.'
+                      : 'Data belum masuk ke cloud. Periksa koneksi lalu coba simpan ulang.'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-4">
+                {!saveError.blocked && (
+                  <button
+                    onClick={handleRetrySave}
+                    className="flex-1 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold"
+                  >
+                    Coba Simpan Lagi
+                  </button>
+                )}
+                <button
+                  onClick={() => setSaveError(null)}
+                  className="flex-1 py-2.5 rounded-xl border border-slate-600/50 text-xs font-semibold"
+                >
+                  Tutup
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* MODAL PENCATATAN TRANSAKSI */}
         {isTxModalOpen && (
@@ -3102,7 +3284,7 @@ function SyncAndExportView({
               type="text"
               value={vaultDraft}
               onChange={(e) => setVaultDraft(e.target.value)}
-              placeholder="Contoh: dompet-jeki-2026"
+              placeholder="Contoh: dompet-budi-2026"
               className={`flex-1 px-3 py-2 rounded-xl border text-xs font-semibold outline-none ${
                 darkMode
                   ? 'bg-slate-900 border-slate-700'
