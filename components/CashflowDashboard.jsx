@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import {
   Wallet,
   TrendingUp,
@@ -689,6 +689,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [isOnline, setIsOnline] = useState(true);
   const [saveError, setSaveError] = useState(null); // { reason, payload, blocked }
   const [customVaultKey, setCustomVaultKey] = useState('');
   const [syncStatus, setSyncStatus] = useState('connecting'); // connecting | synced | saving | error
@@ -737,8 +738,14 @@ export default function App() {
 
   // --- DETEKSI KONEKSI INTERNET PERANGKAT ---
   useEffect(() => {
-    const goOffline = () => setSyncStatus('error');
-    const goOnline = () => setSyncStatus((s) => (s === 'error' ? 'connecting' : s));
+    const goOffline = () => {
+      setIsOnline(false);
+      setSyncStatus('error');
+    };
+    const goOnline = () => {
+      setIsOnline(true);
+      setSyncStatus((s) => (s === 'error' ? 'connecting' : s));
+    };
     window.addEventListener('offline', goOffline);
     window.addEventListener('online', goOnline);
     return () => {
@@ -793,9 +800,11 @@ export default function App() {
         updatedAt: new Date().toISOString(),
         ownerEmail: user.email || ''
       };
+      // Buang undefined/NaN (Firestore menolak undefined) sebelum dikirim
+      const cleanPayload = JSON.parse(JSON.stringify(payload));
       // setDoc tidak pernah reject saat offline (menunggu tanpa batas) -> beri batas waktu
       await Promise.race([
-        setDoc(docRef, payload, { merge: true }),
+        setDoc(docRef, cleanPayload, { merge: true }),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('timeout')), SAVE_TIMEOUT_MS)
         )
@@ -805,10 +814,15 @@ export default function App() {
       return true;
     } catch (err) {
       console.error('Gagal menyimpan ke Cloud:', err);
+      const code = err?.code || '';
       return fail(
         err?.message === 'timeout'
           ? 'Koneksi terputus atau terlalu lambat.'
-          : 'Server menolak penyimpanan (cek Firestore Rules / login).'
+          : code === 'permission-denied'
+          ? 'Akses ditolak Firestore (Rules belum dipublish atau belum sesuai).'
+          : code === 'invalid-argument'
+          ? 'Format data tidak valid untuk Firestore.'
+          : `Gagal menyimpan ke server${code ? ` (${code})` : ''}.`
       );
     }
   };
@@ -1645,7 +1659,7 @@ export default function App() {
   // Cegah pencatatan saat cloud belum tersambung / offline
   const openTxModal = () => {
     const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-    if (offline || (syncStatus !== 'synced' && syncStatus !== 'saving')) {
+    if (offline || !user || !hasLoadedInitialCloudRef.current) {
       setSaveError({
         reason: offline
           ? 'Perangkat sedang offline.'
@@ -1767,6 +1781,8 @@ export default function App() {
                     ? 'SYNCING'
                     : syncStatus === 'connecting'
                     ? 'CONNECTING'
+                    : isOnline
+                    ? 'ERROR'
                     : 'OFFLINE'}
                 </button>
               </div>
@@ -3523,6 +3539,51 @@ function PngReportModal({ dataUrl, onClose, showToast, darkMode }) {
   );
 }
 // --- MODAL PENCATATAN TRANSAKSI BARU (DENGAN PILIHAN USER RIRIN / JEKI) ---
+// Input nominal dengan pemisah ribuan otomatis (1.500.000). Nilai yang disimpan = string angka murni.
+const formatThousands = (digits) => (digits ? digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.') : '');
+
+function MoneyInput({ value, onValueChange, className, placeholder, required }) {
+  const inputRef = useRef(null);
+  const caretDigitsRef = useRef(null);
+  const display = formatThousands(value);
+
+  useLayoutEffect(() => {
+    const el = inputRef.current;
+    const target = caretDigitsRef.current;
+    if (!el || target === null || document.activeElement !== el) return;
+    let seen = 0;
+    let pos = 0;
+    while (pos < display.length && seen < target) {
+      if (/\d/.test(display[pos])) seen += 1;
+      pos += 1;
+    }
+    el.setSelectionRange(pos, pos);
+    caretDigitsRef.current = null;
+  }, [display]);
+
+  const handleChange = (e) => {
+    const raw = e.target.value;
+    const caret = e.target.selectionStart ?? raw.length;
+    caretDigitsRef.current = raw.slice(0, caret).replace(/\D/g, '').length;
+    const digits = raw.replace(/\D/g, '').replace(/^0+(?=\d)/, '').slice(0, 15);
+    onValueChange(digits);
+  };
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      required={required}
+      value={display}
+      onChange={handleChange}
+      placeholder={placeholder}
+      className={className}
+    />
+  );
+}
+
 function TransactionModal({ onClose, onSubmit, defaultUser = 'Ririn', assets, debts, darkMode }) {
   const [txUser, setTxUser] = useState(defaultUser);
   const [type, setType] = useState('Outcome');
@@ -3625,10 +3686,11 @@ function TransactionModal({ onClose, onSubmit, defaultUser = 'Ririn', assets, de
       amount: numericAmount,
       date,
       note,
-      debtAction: type === 'Debt' ? debtAction : undefined,
-      debtId: type === 'Debt' && debtAction === 'pay' ? selectedDebtId : undefined,
-      assetId: selectedAssetId || undefined,
-      units: units ? Number(units) : undefined
+      // Firestore menolak nilai undefined -> hanya sertakan field yang terisi
+      ...(type === 'Debt' ? { debtAction } : {}),
+      ...(type === 'Debt' && debtAction === 'pay' && selectedDebtId ? { debtId: selectedDebtId } : {}),
+      ...(selectedAssetId ? { assetId: selectedAssetId } : {}),
+      ...(units ? { units: Number(units) } : {})
     });
   };
 
@@ -3827,13 +3889,11 @@ function TransactionModal({ onClose, onSubmit, defaultUser = 'Ririn', assets, de
 
           <div>
             <label className="block font-semibold mb-1 opacity-80">Nominal (Rp)</label>
-            <input
-              type="number"
+            <MoneyInput
               required
-              min="1"
               value={amount}
-              onChange={(e) => handleAmountChange(e.target.value)}
-              placeholder="Contoh: 1500000"
+              onValueChange={handleAmountChange}
+              placeholder="Contoh: 1.500.000"
               className={`w-full px-3.5 py-2.5 rounded-xl border font-bold text-sm outline-none ${
                 darkMode
                   ? 'bg-slate-800 border-slate-700'
