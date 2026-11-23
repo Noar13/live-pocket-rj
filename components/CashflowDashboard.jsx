@@ -33,6 +33,9 @@ import {
   Image as ImageIcon,
   Cloud,
   Download,
+  Upload,
+  Eye,
+  EyeOff,
   Copy,
   Check,
   Share2,
@@ -127,26 +130,26 @@ const GOOGLE_APPS_SCRIPT_TEMPLATE = `function doPost(e) {
   }
 }`;
 
-// --- KONSTANTA & DATA REAL PORTFOLIOMU (DALAM SATUAN IDR & RIBUAN) ---
+// --- KONSTANTA PORTOFOLIO (DALAM SATUAN IDR & RIBUAN); DATA PRIBADI TIDAK DISIMPAN DI SINI ---
 const INITIAL_USER_OPENING = {
-  Jeki: 2875000, // 2,875 (dalam ribu)
-  Ririn: 20376410 // 20,376.410 (dalam ribu)
+  Jeki: 0,
+  Ririn: 0
 };
 
 const INITIAL_MARKET_ASSETS = [
-  // 1. KATEGORI EMAS LOGAM MULIA & PERHIASAN (DATA REAL)
+  // 1. KATEGORI EMAS LOGAM MULIA & PERHIASAN
   {
     id: 'gold-antam',
     symbol: 'ANTM',
-    name: 'LM Antam (10g + 5g + 2g)',
+    name: 'LM Antam',
     type: 'Emas',
     unitLabel: 'gram',
     multiplier: 1,
     price: 2495000,
     prevPrice: 2489000,
     volatility: 0.0022,
-    holdings: 17.0, // 10.0 (19-Mar-26) + 5.0 (22-May-26) + 2.0 (11-Nov-26)
-    avgBuyPrice: 42735000 / 17.0, // Total modal 28,980.0 + 13,755.0 + 0 = 42,735.0 rb
+    holdings: 0,
+    avgBuyPrice: 0,
     color: '#F59E0B'
   },
   {
@@ -159,8 +162,8 @@ const INITIAL_MARKET_ASSETS = [
     price: 2236000,
     prevPrice: 2231000,
     volatility: 0.0023,
-    holdings: 3.0, // 11-Jun-2025: 3.0 gr -> 5,628.0 rb
-    avgBuyPrice: 5628000 / 3.0, // 1,876.0 rb/gr
+    holdings: 0,
+    avgBuyPrice: 0,
     color: '#D97706'
   },
   {
@@ -201,8 +204,8 @@ const INITIAL_MARKET_ASSETS = [
     price: 1850000,
     prevPrice: 1846000,
     volatility: 0.0018,
-    holdings: 2.0, // 11-Jun-2025: 2.0 gr -> 3,336.0 rb
-    avgBuyPrice: 3336000 / 2.0, // 1,668.0 rb/gr
+    holdings: 0,
+    avgBuyPrice: 0,
     color: '#F472B6'
   },
   {
@@ -215,8 +218,8 @@ const INITIAL_MARKET_ASSETS = [
     price: 1750000,
     prevPrice: 1747000,
     volatility: 0.0018,
-    holdings: 1.6, // 11-Jun-2025: 1.6 gr -> 2,452.8 rb
-    avgBuyPrice: 2452800 / 1.6, // 1,533.0 rb/gr
+    holdings: 0,
+    avgBuyPrice: 0,
     color: '#EC4899'
   },
   {
@@ -229,8 +232,8 @@ const INITIAL_MARKET_ASSETS = [
     price: 1350000,
     prevPrice: 1348000,
     volatility: 0.0018,
-    holdings: 1.7, // 11-Jun-2025: 1.7 gr -> 1,825.8 rb
-    avgBuyPrice: 1825800 / 1.7, // 1,074.0 rb/gr
+    holdings: 0,
+    avgBuyPrice: 0,
     color: '#DB2777'
   },
   {
@@ -243,8 +246,8 @@ const INITIAL_MARKET_ASSETS = [
     price: 1350000,
     prevPrice: 1347000,
     volatility: 0.0018,
-    holdings: 4.8, // 11-Jun-2025: 4.8 gr -> 5,289.6 rb
-    avgBuyPrice: 5289600 / 4.8, // 1,102.0 rb/gr
+    holdings: 0,
+    avgBuyPrice: 0,
     color: '#BE185D'
   },
 
@@ -259,7 +262,7 @@ const INITIAL_MARKET_ASSETS = [
     price: 1000, // 1 unit = 1 ribu (Rp 1.000) agar mudah dibaca
     prevPrice: 1000,
     volatility: 0.00015,
-    holdings: 25000, // 1-Oct-2026: 25,000.0 rb (Rp 25.000.000)
+    holdings: 0,
     avgBuyPrice: 1000,
     color: '#F97316'
   },
@@ -289,8 +292,8 @@ const INITIAL_MARKET_ASSETS = [
     price: 2510.19,
     prevPrice: 2507.45,
     volatility: 0.0035,
-    holdings: 4749.2863, // 9-Jan-2026: modal real 15,900.0 rb (Rp 15.900.000)
-    avgBuyPrice: 15900000 / 4749.2863, // ~3,347.8714
+    holdings: 0,
+    avgBuyPrice: 0,
     color: '#2563EB'
   },
   {
@@ -413,151 +416,8 @@ const INITIAL_MARKET_ASSETS = [
 
 const INITIAL_DEBTS = [];
 
-// HISTORI DATA REAL ASET & SALDO AWAL RIRIN & JEKI
-const INITIAL_TRANSACTIONS = [
-  {
-    id: 'tx-real-11',
-    user: 'Ririn',
-    type: 'Saving',
-    category: 'Emas',
-    title: 'Antam (2.0 gr - Bonus/Hadiah)',
-    amount: 0,
-    date: '2026-11-11',
-    assetId: 'gold-antam',
-    units: 2.0,
-    note: '11-Nov-2026 • 2.0 gr (Nominal 0)'
-  },
-  {
-    id: 'tx-real-10',
-    user: 'Ririn',
-    type: 'Saving',
-    category: 'Deposito',
-    title: 'Deposito SeaBank / BCA',
-    amount: 25000000,
-    date: '2026-10-01',
-    assetId: 'dep-seabank',
-    units: 25000,
-    note: '1-Oct-2026 • Penempatan Deposito 25,000.0 rb'
-  },
-  {
-    id: 'tx-real-09',
-    user: 'Ririn',
-    type: 'Saving',
-    category: 'Emas',
-    title: 'Antam (5.0 gr)',
-    amount: 13755000,
-    date: '2026-05-22',
-    assetId: 'gold-antam',
-    units: 5.0,
-    note: '22-May-2026 • Beli 5.0 gr senilai 13,755.0 rb'
-  },
-  {
-    id: 'tx-real-08',
-    user: 'Ririn',
-    type: 'Saving',
-    category: 'Emas',
-    title: 'Antam (10.0 gr)',
-    amount: 28980000,
-    date: '2026-03-19',
-    assetId: 'gold-antam',
-    units: 10.0,
-    note: '19-Mar-2026 • Beli 10.0 gr senilai 28,980.0 rb'
-  },
-  {
-    id: 'tx-real-07',
-    user: 'Jeki',
-    type: 'Saving',
-    category: 'Saham',
-    title: 'Saham Sucorinvest Equity Fund Kelas A',
-    amount: 15900000,
-    date: '2026-01-09',
-    assetId: 'stock-sef-a',
-    units: 4749.2863,
-    note: '9-Jan-2026 • Modal 15,900.0 rb (4,749.2863 unit)'
-  },
-  {
-    id: 'tx-real-06',
-    user: 'Ririn',
-    type: 'Saving',
-    category: 'Emas',
-    title: 'Perhiasan - Kalung (4.8 gr)',
-    amount: 5289600,
-    date: '2025-06-11',
-    assetId: 'gold-kalung',
-    units: 4.8,
-    note: '11-Jun-2025 • Kalung 4.8 gr senilai 5,289.6 rb'
-  },
-  {
-    id: 'tx-real-05',
-    user: 'Ririn',
-    type: 'Saving',
-    category: 'Emas',
-    title: 'Perhiasan - Gelang (1.7 gr)',
-    amount: 1825800,
-    date: '2025-06-11',
-    assetId: 'gold-gelang',
-    units: 1.7,
-    note: '11-Jun-2025 • Gelang 1.7 gr senilai 1,825.8 rb'
-  },
-  {
-    id: 'tx-real-04',
-    user: 'Ririn',
-    type: 'Saving',
-    category: 'Emas',
-    title: 'Perhiasan - Anting Jepit (1.6 gr)',
-    amount: 2452800,
-    date: '2025-06-11',
-    assetId: 'gold-anting',
-    units: 1.6,
-    note: '11-Jun-2025 • Anting Jepit 1.6 gr senilai 2,452.8 rb'
-  },
-  {
-    id: 'tx-real-03',
-    user: 'Ririn',
-    type: 'Saving',
-    category: 'Emas',
-    title: 'Perhiasan - Cincin (2.0 gr)',
-    amount: 3336000,
-    date: '2025-06-11',
-    assetId: 'gold-cincin',
-    units: 2.0,
-    note: '11-Jun-2025 • Cincin 2.0 gr senilai 3,336.0 rb'
-  },
-  {
-    id: 'tx-real-02',
-    user: 'Ririn',
-    type: 'Saving',
-    category: 'Emas',
-    title: 'Semar LM (3.0 gr)',
-    amount: 5628000,
-    date: '2025-06-11',
-    assetId: 'gold-semar',
-    units: 3.0,
-    note: '11-Jun-2025 • LM Semar 3.0 gr senilai 5,628.0 rb'
-  },
-  {
-    id: 'tx-saldo-ririn',
-    user: 'Ririn',
-    type: 'Income',
-    category: 'Saldo Awal',
-    title: 'Saldo Awal Kas Ririn',
-    amount: 20376410,
-    date: '2025-06-01',
-    isOpening: true,
-    note: 'Saldo kas aktif Ririn: 20,376.410 rb'
-  },
-  {
-    id: 'tx-saldo-jeki',
-    user: 'Jeki',
-    type: 'Income',
-    category: 'Saldo Awal',
-    title: 'Saldo Awal Kas Jeki',
-    amount: 2875000,
-    date: '2025-06-01',
-    isOpening: true,
-    note: 'Saldo kas aktif Jeki: 2,875.000 rb'
-  }
-];
+// Data awal sengaja KOSONG: data asli hanya disimpan di Firestore (bukan di source/bundle publik)
+const INITIAL_TRANSACTIONS = [];
 
 const CATEGORIES = {
   Income: ['Gaji', 'Bonus', 'Freelance', 'Dividen', 'Bunga Deposito', 'Saldo Awal', 'Lainnya'],
@@ -590,7 +450,7 @@ const CASHFLOW_TREND_DATA = [
 ];
 
 
-// --- HELPER FORMAT RIBUAN (CONTOH: 2,875 / 20,376.410) & RUPIAH PENUH ---
+// --- HELPER FORMAT RIBUAN & RUPIAH PENUH ---
 const formatRibu = (num, showUnit = true) => {
   if (isNaN(num)) return showUnit ? '0 rb' : '0';
   const inThousands = num / 1000;
@@ -602,7 +462,60 @@ const formatRibu = (num, showUnit = true) => {
   return showUnit ? `${formatted} rb` : formatted;
 };
 
-const formatIDR = (num, compact = false, inThousandsMode = true) => {
+// --- VALIDASI & SANITASI (KEAMANAN) ---
+// Hanya izinkan Web App Google Apps Script resmi sebagai tujuan sinkron (cegah data bocor ke URL lain)
+const isValidSheetsWebhook = (value) => {
+  try {
+    const u = new URL(String(value).trim());
+    return (
+      u.protocol === 'https:' &&
+      u.hostname === 'script.google.com' &&
+      /^\/(macros|a\/macros\/[^/]+)\/s\/[^/]+\/(exec|dev)$/.test(u.pathname)
+    );
+  } catch {
+    return false;
+  }
+};
+
+const VAULT_MIN_LENGTH = 10;
+const cleanVaultKey = (raw) => String(raw || '').trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+
+// Ambil hanya nilai primitif yang aman dari data hasil import backup
+const sanitizeRecord = (obj) => {
+  const out = {};
+  if (!obj || typeof obj !== 'object') return out;
+  for (const [k, v] of Object.entries(obj)) {
+    if (!/^[A-Za-z0-9_]{1,40}$/.test(k)) continue;
+    if (typeof v === 'string') out[k] = v.slice(0, 300);
+    else if (typeof v === 'number' && Number.isFinite(v)) out[k] = v;
+    else if (typeof v === 'boolean') out[k] = v;
+  }
+  return out;
+};
+
+// --- MODE SEMBUNYIKAN SALDO (disimpan di level modul agar semua formatter ikut ter-mask) ---
+const HIDE_BALANCE_KEY = 'dompetku:hide-balance';
+const MASK_TEXT = '••••••';
+const privacy = {
+  hidden: (() => {
+    try {
+      return typeof window === 'undefined' ? true : window.localStorage.getItem(HIDE_BALANCE_KEY) !== '0';
+    } catch {
+      return true;
+    }
+  })()
+};
+const setPrivacyHidden = (value) => {
+  privacy.hidden = value;
+  try {
+    window.localStorage.setItem(HIDE_BALANCE_KEY, value ? '1' : '0');
+  } catch {
+    /* localStorage tidak tersedia -> abaikan */
+  }
+};
+
+// Versi mentah (selalu tampil) dipakai untuk export laporan & data yang disimpan
+const formatIDRRaw = (num, compact = false, inThousandsMode = true) => {
   if (isNaN(num)) return inThousandsMode ? '0 rb' : 'Rp 0';
   if (inThousandsMode) {
     return formatRibu(num, true);
@@ -622,6 +535,10 @@ const formatIDR = (num, compact = false, inThousandsMode = true) => {
   }).format(Math.round(num));
 };
 
+// Versi tampilan: otomatis tersembunyi saat mode sembunyikan saldo aktif
+const formatIDR = (num, compact = false, inThousandsMode = true) =>
+  privacy.hidden ? MASK_TEXT : formatIDRRaw(num, compact, inThousandsMode);
+
 const formatUnitIDR = (num, inThousandsMode = false) => {
   if (isNaN(num)) return 'Rp 0';
   if (inThousandsMode && num >= 1000) {
@@ -635,6 +552,8 @@ const formatUnitIDR = (num, inThousandsMode = false) => {
     maximumFractionDigits: num < 10 ? 3 : num < 10000 ? 4 : 2
   }).format(num);
 };
+
+const formatUnitsHidable = (units) => (privacy.hidden ? '••' : formatUnitsCount(units));
 
 const formatUnitsCount = (units) => {
   if (isNaN(units)) return '0';
@@ -677,7 +596,7 @@ function drawRoundRect(ctx, x, y, width, height, radius) {
 // --- KOMPONEN UTAMA ---
 export default function App() {
   const [darkMode, setDarkMode] = useState(true);
-  const [inThousandsMode, setInThousandsMode] = useState(true); // Default tampilan dalam ribuan (contoh: 2,875 / 20,376.410)
+  const [inThousandsMode, setInThousandsMode] = useState(true); // Default tampilan dalam ribuan
   const [activeTab, setActiveTab] = useState('dashboard');
 
   // --- STATE USER AKTIF (RIRIN vs JEKI vs SEMUA) ---
@@ -690,6 +609,7 @@ export default function App() {
   const [signingIn, setSigningIn] = useState(false);
   const [authError, setAuthError] = useState('');
   const [isOnline, setIsOnline] = useState(true);
+  const [hideBalance, setHideBalance] = useState(() => privacy.hidden);
   const [saveError, setSaveError] = useState(null); // { reason, payload, blocked }
   const [customVaultKey, setCustomVaultKey] = useState('');
   const [syncStatus, setSyncStatus] = useState('connecting'); // connecting | synced | saving | error
@@ -697,7 +617,7 @@ export default function App() {
   const isRemoteSnapshotRef = useRef(false);
   const hasLoadedInitialCloudRef = useRef(false);
 
-  // --- STATE DATA KEUANGAN (SALDO AWAL REAL: JEKI 2,875 + RIRIN 20,376.410 = 23,251.410) ---
+  // --- STATE DATA KEUANGAN ---
   const [transactions, setTransactions] = useState(INITIAL_TRANSACTIONS);
   const [assets, setAssets] = useState(INITIAL_MARKET_ASSETS);
   const [debts, setDebts] = useState(INITIAL_DEBTS);
@@ -754,10 +674,36 @@ export default function App() {
     };
   }, []);
 
+  // --- AUTO-SEMBUNYIKAN SALDO: saat tab/app ke background atau tidak aktif 2 menit ---
+  useEffect(() => {
+    if (!user) return undefined;
+    let idleTimer;
+    const hideNow = () => {
+      setPrivacyHidden(true);
+      setHideBalance(true);
+    };
+    const armIdle = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(hideNow, 120000);
+    };
+    const onVisibility = () => {
+      if (document.hidden) hideNow();
+    };
+    const events = ['pointerdown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach((ev) => window.addEventListener(ev, armIdle, { passive: true, capture: true }));
+    document.addEventListener('visibilitychange', onVisibility);
+    armIdle();
+    return () => {
+      clearTimeout(idleTimer);
+      events.forEach((ev) => window.removeEventListener(ev, armIdle, { capture: true }));
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user]);
+
   const getCloudDocRef = () => {
     if (!user) return null;
-    const vaultClean = customVaultKey.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
-    if (vaultClean.length >= 4) {
+    const vaultClean = cleanVaultKey(customVaultKey);
+    if (vaultClean.length >= VAULT_MIN_LENGTH) {
       return doc(db, 'artifacts', appId, 'public', 'data', `vault_${vaultClean}`);
     }
     return doc(db, 'artifacts', appId, 'users', user.uid, 'finance', 'state');
@@ -854,7 +800,9 @@ export default function App() {
           if (Array.isArray(data.transactions)) setTransactions(data.transactions);
           if (Array.isArray(data.debts)) setDebts(data.debts);
           if (typeof data.baseCashBalance === 'number') setBaseCashBalance(data.baseCashBalance);
-          if (typeof data.sheetsWebhookUrl === 'string') setSheetsWebhookUrl(data.sheetsWebhookUrl);
+          if (typeof data.sheetsWebhookUrl === 'string') {
+            setSheetsWebhookUrl(isValidSheetsWebhook(data.sheetsWebhookUrl) ? data.sheetsWebhookUrl : '');
+          }
           if (typeof data.sheetsAutoSync === 'boolean') setSheetsAutoSync(data.sheetsAutoSync);
 
           if (Array.isArray(data.assets)) {
@@ -943,6 +891,8 @@ export default function App() {
       setBaseCashBalance(INITIAL_USER_OPENING.Jeki + INITIAL_USER_OPENING.Ririn);
       setCustomVaultKey('');
       setSheetsWebhookUrl('');
+      setPrivacyHidden(true);
+      setHideBalance(true);
       setLastCloudSync(null);
       setSyncStatus('connecting');
     } catch (err) {
@@ -953,6 +903,12 @@ export default function App() {
   // --- INTEGRASI GOOGLE SHEETS WEBHOOK ---
   const pushToGoogleSheets = async (mode = 'full_sync', singleTx = null, customUrl = null) => {
     const targetUrl = (customUrl ?? sheetsWebhookUrl).trim();
+    if (targetUrl && !isValidSheetsWebhook(targetUrl)) {
+      if (mode === 'full_sync') {
+        showToast('URL harus Web App Google Apps Script (https://script.google.com/macros/s/.../exec).', 'info');
+      }
+      return false;
+    }
     if (!targetUrl) {
       if (mode === 'full_sync') {
         showToast('Masukkan URL Google Apps Script terlebih dahulu!', 'info');
@@ -1259,12 +1215,12 @@ export default function App() {
 
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 28px sans-serif';
-    ctx.fillText(formatIDR(summary.netWorth, false, inThousandsMode), 44, 136);
+    ctx.fillText(formatIDRRaw(summary.netWorth, false, inThousandsMode), 44, 136);
 
     ctx.fillStyle = '#FDE68A';
     ctx.font = 'bold 11.5px sans-serif';
     ctx.fillText(
-      `Kas Aktif: ${formatIDR(summary.baseCashBalance, false, inThousandsMode)}  |  Portofolio: ${formatIDR(
+      `Kas Aktif: ${formatIDRRaw(summary.baseCashBalance, false, inThousandsMode)}  |  Portofolio: ${formatIDRRaw(
         summary.portfolioValue,
         false,
         inThousandsMode
@@ -1286,7 +1242,7 @@ export default function App() {
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 15px sans-serif';
     const ririnNet = summary.byUser?.Ririn?.netFlow || 0;
-    ctx.fillText(`${formatIDR(ririnNet, false, inThousandsMode)}`, 38, 254);
+    ctx.fillText(`${formatIDRRaw(ririnNet, false, inThousandsMode)}`, 38, 254);
 
     drawRoundRect(ctx, 276, 208, 240, 66, 16);
     ctx.fillStyle = '#17253B';
@@ -1300,34 +1256,34 @@ export default function App() {
     ctx.fillStyle = '#FFFFFF';
     ctx.font = 'bold 15px sans-serif';
     const jekiNet = summary.byUser?.Jeki?.netFlow || 0;
-    ctx.fillText(`${formatIDR(jekiNet, false, inThousandsMode)}`, 290, 254);
+    ctx.fillText(`${formatIDRRaw(jekiNet, false, inThousandsMode)}`, 290, 254);
 
     // 4. Ringkasan 4 Pilar Cashflow
     const cards = [
       {
         label: 'PEMASUKAN / SALDO KAS',
-        val: formatIDR(summary.totalIncome, false, inThousandsMode),
+        val: formatIDRRaw(summary.totalIncome, false, inThousandsMode),
         color: '#34D399',
         x: 24,
         y: 286
       },
       {
         label: 'PENGELUARAN (OUTCOME)',
-        val: formatIDR(summary.totalOutcome, false, inThousandsMode),
+        val: formatIDRRaw(summary.totalOutcome, false, inThousandsMode),
         color: '#FB7185',
         x: 276,
         y: 286
       },
       {
         label: 'TOTAL KAS & INVESTASI',
-        val: formatIDR(summary.totalSavingAndInvestment, false, inThousandsMode),
+        val: formatIDRRaw(summary.totalSavingAndInvestment, false, inThousandsMode),
         color: '#FBBF24',
         x: 24,
         y: 366
       },
       {
         label: 'SISA HUTANG (DEBT)',
-        val: formatIDR(summary.totalDebtRemaining, false, inThousandsMode),
+        val: formatIDRRaw(summary.totalDebtRemaining, false, inThousandsMode),
         color: '#C084FC',
         x: 276,
         y: 366
@@ -1369,26 +1325,26 @@ export default function App() {
 
     const assetRows = [
       {
-        name: 'Emas LM (Antam 17g, Semar 3g) & Perhiasan (10.1g)',
-        sub: `Antam ${formatIDR(antamPrice, true, inThousandsMode)} | Semar ${formatIDR(semarPrice, true, inThousandsMode)}`,
+        name: 'Emas LM (Antam, Semar) & Perhiasan',
+        sub: `Antam ${formatIDRRaw(antamPrice, true, inThousandsMode)} | Semar ${formatIDRRaw(semarPrice, true, inThousandsMode)}`,
         val: summary.portfolioByType['Emas'] || 0,
         dot: '#F59E0B'
       },
       {
         name: 'Deposito Bank (SeaBank / BCA)',
-        sub: 'Penempatan Deposito 25,000.0 rb + Bunga Berjalan',
+        sub: 'Penempatan Deposito + Bunga Berjalan',
         val: summary.portfolioByType['Deposito'] || 0,
         dot: '#F97316'
       },
       {
         name: 'Sucorinvest Equity Fund Kelas A (SEF-A)',
-        sub: `${formatUnitsCount(sefAsset?.holdings || 0)} unit • Modal 15,900.0 rb`,
+        sub: `${formatUnitsCount(sefAsset?.holdings || 0)} unit • Modal ${formatRibu((sefAsset?.holdings || 0) * (sefAsset?.avgBuyPrice || 0))}`,
         val: sefVal,
         dot: '#3B82F6'
       },
       {
         name: 'Valuta Asing (USD, JPY, SGD, AUD, MYR, VND)',
-        sub: `Kurs USD: ${formatIDR(assets.find((a) => a.id === 'fx-usd')?.price || 0, false, inThousandsMode)}`,
+        sub: `Kurs USD: ${formatIDRRaw(assets.find((a) => a.id === 'fx-usd')?.price || 0, false, inThousandsMode)}`,
         val: summary.portfolioByType['Valas'] || 0,
         dot: '#06B6D4'
       },
@@ -1418,7 +1374,7 @@ export default function App() {
       ctx.fillStyle = '#FFFFFF';
       ctx.font = 'bold 12px sans-serif';
       ctx.textAlign = 'right';
-      ctx.fillText(formatIDR(row.val, false, inThousandsMode), width - 42, rowY + 4);
+      ctx.fillText(formatIDRRaw(row.val, false, inThousandsMode), width - 42, rowY + 4);
       ctx.textAlign = 'left';
     });
 
@@ -1444,7 +1400,7 @@ export default function App() {
       ctx.textAlign = 'right';
       ctx.fillStyle = '#94A3B8';
       ctx.font = '10px sans-serif';
-      ctx.fillText(`Bal: ${formatIDR(tx.runningBalance, true, inThousandsMode)}`, width - 42, ty);
+      ctx.fillText(`Bal: ${formatIDRRaw(tx.runningBalance, true, inThousandsMode)}`, width - 42, ty);
       ctx.textAlign = 'left';
     });
 
@@ -1647,13 +1603,96 @@ export default function App() {
     setDebts(INITIAL_DEBTS);
     setBaseCashBalance(initialCash);
     setConfirmResetModal(false);
-    showToast('Data dikembalikan ke data awal Ririn & Jeki!');
+    showToast('Data dikosongkan ke kondisi awal!');
     await persistStateToCloud({
       transactions: INITIAL_TRANSACTIONS,
       assets: INITIAL_MARKET_ASSETS,
       debts: INITIAL_DEBTS,
       baseCashBalance: initialCash
     });
+  };
+
+  const applyHideBalance = (value) => {
+    setPrivacyHidden(value);
+    setHideBalance(value);
+  };
+
+  // --- BACKUP & RESTORE JSON ---
+  const handleExportBackup = () => {
+    const backup = {
+      app: 'dompetku',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      baseCashBalance,
+      transactions,
+      debts,
+      assets: assets.map((a) => ({
+        id: a.id,
+        symbol: a.symbol,
+        holdings: a.holdings,
+        avgBuyPrice: a.avgBuyPrice
+      }))
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `dompetku-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast('Backup JSON diunduh. Simpan di tempat yang aman, jangan di-upload ke GitHub!');
+  };
+
+  const handleImportBackup = async (file) => {
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      showToast('File backup terlalu besar (maks 5 MB).', 'info');
+      return;
+    }
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (
+        parsed?.app !== 'dompetku' ||
+        !Array.isArray(parsed.transactions) ||
+        !Array.isArray(parsed.assets) ||
+        !Array.isArray(parsed.debts) ||
+        !Number.isFinite(parsed.baseCashBalance)
+      ) {
+        throw new Error('format-invalid');
+      }
+      const nextTransactions = parsed.transactions.slice(0, 5000).map(sanitizeRecord);
+      const nextDebts = parsed.debts.slice(0, 200).map(sanitizeRecord);
+      const nextAssets = INITIAL_MARKET_ASSETS.map((def) => {
+        const saved = parsed.assets.find((a) => a?.id === def.id);
+        return saved
+          ? {
+              ...def,
+              holdings: Number.isFinite(saved.holdings) ? saved.holdings : def.holdings,
+              avgBuyPrice: Number.isFinite(saved.avgBuyPrice) ? saved.avgBuyPrice : def.avgBuyPrice
+            }
+          : def;
+      });
+      const ok = window.confirm(
+        `Restore backup?\n\n${nextTransactions.length} transaksi akan MENIMPA seluruh data saat ini (lokal & cloud).`
+      );
+      if (!ok) return;
+      setTransactions(nextTransactions);
+      setDebts(nextDebts);
+      setAssets(nextAssets);
+      setBaseCashBalance(parsed.baseCashBalance);
+      const saved = await persistStateToCloud({
+        transactions: nextTransactions,
+        debts: nextDebts,
+        assets: nextAssets,
+        baseCashBalance: parsed.baseCashBalance
+      });
+      if (saved) showToast('Backup berhasil di-restore dan tersimpan ke cloud!');
+    } catch (err) {
+      console.error('Import backup error:', err);
+      showToast('File backup tidak valid.', 'info');
+    }
   };
 
   // Cegah pencatatan saat cloud belum tersambung / offline
@@ -1788,7 +1827,7 @@ export default function App() {
               </div>
               <p className={`text-[10px] truncate max-w-[165px] ${theme.textMuted}`}>
                 {customVaultKey.trim()
-                  ? `Vault: ${customVaultKey.trim()}`
+                  ? 'Vault terhubung'
                   : user?.email
                   ? user.email
                   : 'Cloud Multi-Device Aktif'}
@@ -1797,10 +1836,10 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5">
-            {/* SAKELAR FORMAT RIBUAN (2,875 rb) vs RUPIAH PENUH */}
+            {/* SAKELAR FORMAT RIBUAN vs RUPIAH PENUH */}
             <button
               onClick={() => setInThousandsMode(!inThousandsMode)}
-              title="Ubah Tampilan Ribuan (2,875) / Rupiah Penuh"
+              title="Ubah Tampilan Ribuan / Rupiah Penuh"
               className={`px-2 py-2 rounded-xl border text-[10px] font-extrabold transition ${
                 inThousandsMode
                   ? 'bg-amber-400/15 border-amber-400/40 text-amber-400'
@@ -1810,14 +1849,29 @@ export default function App() {
               {inThousandsMode ? 'Rb' : 'Rp'}
             </button>
 
+            {/* SAKELAR LIHAT / SEMBUNYIKAN SALDO */}
+            <button
+              onClick={() => applyHideBalance(!hideBalance)}
+              title={hideBalance ? 'Tampilkan saldo' : 'Sembunyikan saldo'}
+              aria-label={hideBalance ? 'Tampilkan saldo' : 'Sembunyikan saldo'}
+              aria-pressed={hideBalance}
+              className={`p-2 rounded-xl border transition ${
+                hideBalance
+                  ? 'bg-amber-400/15 border-amber-400/40 text-amber-400'
+                  : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+              }`}
+            >
+              {hideBalance ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+
             {/* TOMBOL EXPORT LAPORAN PNG */}
             <button
               onClick={handleGenerateReportPNG}
               title="Export Laporan ke PNG"
-              className="px-2.5 py-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 text-[11px] font-bold transition"
+              aria-label="Export Laporan ke PNG"
+              className="p-2 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 border border-emerald-500/30 flex items-center transition"
             >
-              <ImageIcon className="w-3.5 h-3.5" />
-              <span>PNG</span>
+              <ImageIcon className="w-4 h-4" />
             </button>
 
             <button
@@ -1929,6 +1983,8 @@ export default function App() {
               lastCloudSync={lastCloudSync}
               onGoogleSignIn={handleGoogleSignIn}
               onSignOut={handleSignOut}
+              onExportBackup={handleExportBackup}
+              onImportBackup={handleImportBackup}
               sheetsWebhookUrl={sheetsWebhookUrl}
               setSheetsWebhookUrl={(val) => {
                 setSheetsWebhookUrl(val);
@@ -2257,7 +2313,7 @@ function DashboardView({
             </div>
           </div>
 
-          {/* BREAKDOWN SALDO KAS RIRIN (20,376.410) VS JEKI (2,875) */}
+          {/* BREAKDOWN SALDO KAS RIRIN VS JEKI */}
           <div className="grid grid-cols-2 gap-2 mt-3 pt-2.5 border-t border-white/15 text-[11px]">
             <div className="px-2.5 py-1.5 rounded-xl bg-rose-500/20 border border-rose-300/25 flex items-center justify-between">
               <span className="font-bold text-rose-200 flex items-center gap-1">
@@ -2381,7 +2437,7 @@ function DashboardView({
           </div>
         </div>
 
-        {/* HIGHLIGHT KARTU SUCORINVEST EQUITY FUND KELAS A (MODAL 15,900.0 rb) */}
+        {/* HIGHLIGHT KARTU SUCORINVEST EQUITY FUND KELAS A */}
         {sefAsset && (
           <div
             onClick={() => onFilterMarket('Saham')}
@@ -2399,7 +2455,7 @@ function DashboardView({
             <div className="flex items-center justify-between text-xs mt-1.5">
               <div>
                 <p className={`text-[10px] ${theme.textMuted}`}>
-                  {formatUnitsCount(sefAsset.holdings)} unit • Modal: {formatIDR(sefCostVal, false, inThousandsMode)}
+                  {formatUnitsHidable(sefAsset.holdings)} unit • Modal: {formatIDR(sefCostVal, false, inThousandsMode)}
                 </p>
                 <p className="font-extrabold text-sm mt-0.5">
                   {formatIDR(sefCurrentVal, false, inThousandsMode)}
@@ -2422,7 +2478,7 @@ function DashboardView({
           </div>
         )}
 
-        {/* TICKER HORIZONTAL EMAS (ANTAM 17g, SEMAR 3g, PERHIASAN) & DEPOSITO (25,000.0 rb) */}
+        {/* TICKER HORIZONTAL EMAS (ANTAM, SEMAR, PERHIASAN) & DEPOSITO */}
         <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar mb-3">
           {[
             assets.find((a) => a.id === 'gold-antam'),
@@ -2458,7 +2514,7 @@ function DashboardView({
                   <div className={`text-[10px] ${theme.textMuted}`}>
                     {asset.type === 'Deposito'
                       ? 'Deposito Aktif'
-                      : `${formatUnitsCount(asset.holdings)} gr • ${formatUnitIDR(asset.price, inThousandsMode)}/gr`}
+                      : `${formatUnitsHidable(asset.holdings)} gr • ${formatUnitIDR(asset.price, inThousandsMode)}/gr`}
                   </div>
                 </div>
               );
@@ -2986,10 +3042,10 @@ function MarketView({
                     Kepemilikan ({asset.unitLabel})
                   </p>
                   <p className="font-bold">
-                    {formatUnitsCount(asset.holdings)} {asset.unitLabel}
+                    {formatUnitsHidable(asset.holdings)} {asset.unitLabel}
                     {asset.multiplier > 1 && (
                       <span className={`text-[10px] font-normal ml-1 ${theme.textMuted}`}>
-                        ({formatUnitsCount(asset.holdings * asset.multiplier)} lbr)
+                        ({formatUnitsHidable(asset.holdings * asset.multiplier)} lbr)
                       </span>
                     )}
                   </p>
@@ -3166,10 +3222,13 @@ function SyncAndExportView({
   onPushSheetsNow,
   onDownloadCSV,
   onGeneratePNG,
+  onExportBackup,
+  onImportBackup,
   showToast,
   darkMode,
   theme
 }) {
+  const backupInputRef = useRef(null);
   const [vaultDraft, setVaultDraft] = useState(customVaultKey);
   const [urlDraft, setUrlDraft] = useState(sheetsWebhookUrl);
   const [copiedScript, setCopiedScript] = useState(false);
@@ -3177,16 +3236,25 @@ function SyncAndExportView({
 
   const handleApplyVaultKey = (e) => {
     e.preventDefault();
-    setCustomVaultKey(vaultDraft.trim());
-    showToast(
-      vaultDraft.trim()
-        ? `Terhubung ke Ruang Cloud "${vaultDraft.trim()}"!`
-        : 'Kembali ke ruang akun pribadi'
-    );
+    const cleaned = cleanVaultKey(vaultDraft);
+    if (vaultDraft.trim() && cleaned.length < VAULT_MIN_LENGTH) {
+      showToast(
+        `Kode vault minimal ${VAULT_MIN_LENGTH} karakter (huruf kecil, angka, - atau _). Pakai kode panjang & acak.`,
+        'info'
+      );
+      return;
+    }
+    setCustomVaultKey(cleaned);
+    setVaultDraft(cleaned);
+    showToast(cleaned ? 'Terhubung ke Ruang Cloud bersama!' : 'Kembali ke ruang akun pribadi');
   };
 
   const handleSaveSheetsUrl = (e) => {
     e.preventDefault();
+    if (urlDraft.trim() && !isValidSheetsWebhook(urlDraft)) {
+      showToast('URL harus Web App Google Apps Script: https://script.google.com/macros/s/.../exec', 'info');
+      return;
+    }
     setSheetsWebhookUrl(urlDraft.trim());
     showToast('URL Google Sheets Web App disimpan!');
   };
@@ -3228,6 +3296,43 @@ function SyncAndExportView({
             <Download className="w-4 h-4 text-amber-300" />
             <span>Download CSV</span>
           </button>
+        </div>
+      </div>
+
+      {/* 1B. BACKUP & RESTORE DATA (JSON) */}
+      <div className={`rounded-3xl p-4 border ${theme.card}`}>
+        <h3 className="font-bold text-sm">Backup &amp; Restore Data</h3>
+        <p className={`text-[11px] mt-1 mb-3 leading-relaxed ${theme.textMuted}`}>
+          Unduh salinan seluruh data (JSON) sebagai cadangan, atau pulihkan dari file backup. File backup berisi data
+          keuangan asli, simpan di tempat aman dan jangan di-upload ke GitHub.
+        </p>
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onClick={onExportBackup}
+            className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition"
+          >
+            <Download className="w-4 h-4" />
+            <span>Backup JSON</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => backupInputRef.current?.click()}
+            className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-500/40 text-xs font-bold transition hover:bg-slate-500/10"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Restore JSON</span>
+          </button>
+          <input
+            ref={backupInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => {
+              onImportBackup(e.target.files?.[0]);
+              e.target.value = '';
+            }}
+          />
         </div>
       </div>
 
@@ -3293,14 +3398,14 @@ function SyncAndExportView({
             Kode Sinkronisasi Lintas Browser (Sync Key)
           </label>
           <p className={`text-[10px] leading-relaxed ${theme.textMuted}`}>
-            Masukkan kode unik pribadi (min. 4 karakter), lalu masukkan kode yang sama saat membuka aplikasi di browser atau HP lain.
+            Masukkan kode unik pribadi (min. 10 karakter, panjang & acak), lalu masukkan kode yang sama saat membuka aplikasi di browser atau HP lain.
           </p>
           <div className="flex gap-2">
             <input
               type="text"
               value={vaultDraft}
               onChange={(e) => setVaultDraft(e.target.value)}
-              placeholder="Contoh: dompet-budi-2026"
+              placeholder="Contoh: dompet-x7k2-mq93-lp48"
               className={`flex-1 px-3 py-2 rounded-xl border text-xs font-semibold outline-none ${
                 darkMode
                   ? 'bg-slate-900 border-slate-700'
@@ -4085,7 +4190,7 @@ function AssetTradeModal({
           <div className="p-3 rounded-2xl bg-slate-500/10 flex items-center justify-between">
             <span className="opacity-80">Estimasi Nilai (IDR):</span>
             <span className="font-extrabold text-sm text-emerald-400">
-              {formatIDR(estimatedTotal)}
+              {formatIDRRaw(estimatedTotal)}
             </span>
           </div>
 

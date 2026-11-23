@@ -2,20 +2,43 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Wajib login Google (login anonim tidak diterima)
-    function signedIn() {
+    // Hanya akun Google terverifikasi yang ada di daftar ini yang boleh akses.
+    // WAJIB: pastikan email di bawah sama persis dengan email login masing-masing.
+    function isOwnerAccount() {
       return request.auth != null
-        && request.auth.token.firebase.sign_in_provider != 'anonymous';
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in [
+          'jakapradana13@gmail.com',
+          'GANTI_DENGAN_EMAIL_RIRIN@gmail.com'
+        ];
+    }
+
+    // Validasi bentuk & ukuran data (cegah data sampah / dokumen raksasa)
+    function validPayload() {
+      let d = request.resource.data;
+      return d.transactions is list && d.transactions.size() <= 5000
+        && d.assets is list && d.assets.size() <= 100
+        && d.debts is list && d.debts.size() <= 200
+        && d.baseCashBalance is number
+        && (!('sheetsWebhookUrl' in d)
+            || (d.sheetsWebhookUrl is string && d.sheetsWebhookUrl.size() <= 300));
     }
 
     // Data pribadi per akun
-    match /artifacts/{appId}/users/{userId}/{document=**} {
-      allow read, write: if signedIn() && request.auth.uid == userId;
+    match /artifacts/dompetku-ririn-jeki/users/{userId}/{document=**} {
+      allow read: if isOwnerAccount() && request.auth.uid == userId;
+      allow create, update: if isOwnerAccount() && request.auth.uid == userId && validPayload();
+      allow delete: if false;
     }
 
-    // Vault bersama via kode sinkronisasi (tanpa list & delete)
-    match /artifacts/{appId}/public/data/{docId} {
-      allow get, create, update: if signedIn();
+    // Vault bersama (kode sinkron): hanya get, tidak bisa list / hapus
+    match /artifacts/dompetku-ririn-jeki/public/data/{docId} {
+      allow get: if isOwnerAccount();
+      allow create, update: if isOwnerAccount() && validPayload();
+      allow list, delete: if false;
     }
+
+    // Selain itu: ditolak
   }
 }
